@@ -10,6 +10,7 @@ A React + TypeScript application for generating and managing [Swarm](https://www
 - **Token Funding**: Fund wallets with xDAI and xBZZ tokens
 - **QR Code Generation**: Generate printable QR codes for gift wallets
 - **Smart Contract Integration**: Uses the fund contract for efficient token distribution
+<img width="922" height="600" alt="image" src="https://github.com/user-attachments/assets/b10305f5-dbfa-4688-b85c-88a2c378e6a4" />
 
 ### 💸 Recover Funds Tab
 
@@ -18,6 +19,7 @@ A React + TypeScript application for generating and managing [Swarm](https://www
 - **Automatic Transfers**: Transfer all xDAI and xBZZ to connected wallet
 - **Transaction Tracking**: View transaction hashes and block explorer links
 - **Error Handling**: Comprehensive error reporting for failed recoveries
+<img width="934" height="567" alt="image" src="https://github.com/user-attachments/assets/1e738a07-169f-41db-b750-168ce65aad10" />
 
 ## 🚀 Quick Start
 
