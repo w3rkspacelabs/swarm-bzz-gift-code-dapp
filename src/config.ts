@@ -38,7 +38,6 @@ export const CONFIG = {
     MIN_XDAI_AMOUNT: 0.01,
     MIN_XBZZ_AMOUNT: 0,
     DAI_RESCUE_VALUE: 0.1,
-    DAI_SAFE_SUB_VALUE: 0.008,
 } as const;
 
 // Fund contract ABI for the fund function

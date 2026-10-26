@@ -130,7 +130,6 @@ export async function drain(
 ): Promise<DrainResult> {
     const DAI_IGNORE_THRESHOLD = makeDai(String(CONFIG.MIN_XDAI_AMOUNT));
     const DAI_RESCUE_VALUE = makeDai(String(CONFIG.DAI_RESCUE_VALUE));
-    const DAI_SAFE_SUB_VALUE = makeDai(String(CONFIG.DAI_SAFE_SUB_VALUE));
 
     const address = await privateKeyToAddress(privateKey);
     console.log(`🔍 Checking balances for wallet ${address}...`);
@@ -172,21 +171,15 @@ export async function drain(
             console.log(`ℹ️ No BZZ to transfer from ${address}`);
         }
 
-        // Transfer DAI if balance > threshold
-        if (ethers.getBigInt(dai) > ethers.getBigInt(DAI_IGNORE_THRESHOLD)) {
-            const transferAmount = ethers.getBigInt(dai) - ethers.getBigInt(DAI_SAFE_SUB_VALUE);
-            console.log(`🔄 Transferring ${ethers.formatEther(transferAmount)} DAI from ${address} to ${to}...`);
-            const daiTx = await sendNativeTransaction(
-                privateKey,
-                to,
-                transferAmount.toString(),
-                jsonRpcProvider
-            );
-            result.daiTransferred = ethers.formatEther(transferAmount);
+        // Transfer all remaining DAI; the balance is re-read inside, after the BZZ transfer paid its gas
+        console.log(`🔄 Transferring all DAI from ${address} to ${to}...`);
+        const daiTx = await sendAllNative(privateKey, to, jsonRpcProvider);
+        if (daiTx) {
+            result.daiTransferred = ethers.formatEther(daiTx.value);
             result.daiTxHash = daiTx.transaction.hash;
             console.log(`✅ DAI transfer completed: ${result.daiTxHash}`);
         } else {
-            console.log(`ℹ️ Insufficient DAI to transfer from ${address} (below threshold)`);
+            console.log(`ℹ️ Not enough DAI to cover the transfer fee from ${address}`);
         }
     } catch (error) {
         console.error(`❌ Error draining wallet ${address}:`, error);
@@ -268,6 +261,34 @@ export async function sendNativeTransaction(
     const tx = await signer.sendTransaction({ ...txReq, gasLimit });
     const receipt = await tx.wait(1);
     return { transaction: tx, receipt };
+}
+
+export function sweepableAmount(balance: bigint, gasLimit: bigint, gasPrice: bigint): bigint {
+    const fee = gasLimit * gasPrice;
+    return balance > fee ? balance - fee : 0n;
+}
+
+// Sends the whole native balance minus the exact fee, or returns null when the fee eats it all.
+// A legacy transaction pays exactly gasLimit * gasPrice, so unlike EIP-1559 no refund dust is left behind.
+export async function sendAllNative(privateKey: string, to: string, jsonRpcProvider: string) {
+    const provider = new ethers.JsonRpcProvider(jsonRpcProvider);
+    const signer = new ethers.Wallet(privateKey, provider);
+    const from = await signer.getAddress();
+
+    const balance = await provider.getBalance(from);
+    const fee = await provider.getFeeData();
+    const latest = await provider.getBlock('latest');
+    // Headroom over the base fee, which can rise 12.5% per block, so the transfer is not left underpriced
+    const gasPrice = [fee.gasPrice ?? 0n, (latest?.baseFeePerGas ?? 0n) * 2n].reduce((a, b) => (a > b ? a : b));
+    if (gasPrice === 0n) throw new Error('RPC did not return a gas price');
+    const gasLimit = await provider.estimateGas({ from, to, value: 1n });
+
+    const value = sweepableAmount(balance, gasLimit, gasPrice);
+    if (value === 0n) return null;
+
+    const tx = await signer.sendTransaction({ to, value, type: 0, gasPrice, gasLimit });
+    const receipt = await tx.wait(1);
+    return { transaction: tx, receipt, value };
 }
 
 export async function sendBzzTransaction(
